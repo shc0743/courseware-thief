@@ -73,7 +73,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		);
 
 		if (hPipe == INVALID_HANDLE_VALUE) {
-			return GetLastError();
+			// server not running, open directly
+			return Process.StartAndWait(L"\"" + GetProgramDirW() + L"\" "
+				"--type=user-shell-open-file --file=\"" + fn + L"\" ");
+			return 0;
 		}
 
 		DWORD bytesWritten;
@@ -95,17 +98,17 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		if (file.find(L".") != file.npos) {
 			extName = file.substr(file.find_last_of(L"."));
 		}
-		MessageBox(0, extName.c_str(), 0, 0);
+		//MessageBox(0, extName.c_str(), 0, 0);
 		if (extName == L".pptx" || extName == L".ppt") do{
 			wstring originalOpenType, opencmd;
-			MyQueryRegistryValue(HKEY_CLASSES_ROOT, extName +
-				L"\\CoursewareThiefOriginalValue", originalOpenType);
+			MyQueryRegistryValue(HKEY_CLASSES_ROOT, extName,
+				L"CoursewareThiefOriginalValue", originalOpenType);
 			if (originalOpenType.empty()) break;
 			HKEY hkcmd = NULL;
 			RegOpenKeyExW(HKEY_CLASSES_ROOT, (originalOpenType +
 				L"\\shell\\open\\command").c_str(), 0, KEY_READ, &hkcmd);
 			if (!hkcmd) break;
-			MyQueryRegistryValue(hkcmd, L"", opencmd);
+			MyQueryRegistryValue(hkcmd, L"", L"", opencmd);
 			RegCloseKey(hkcmd);
 			if (opencmd.empty()) break;
 			str_replace(opencmd, L"%1", file);

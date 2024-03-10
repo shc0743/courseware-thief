@@ -152,6 +152,7 @@
     <ResourceCompile Include="PPTOpener.rc" />
   </ItemGroup>
   <ItemGroup>
+    <Image Include="Icon32.ico" />
     <Image Include="ppt.ico" />
     <Image Include="pptIcon.png" />
     <Image Include="splash.bmp" />

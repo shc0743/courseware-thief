@@ -90,6 +90,8 @@ int UiMain(CmdLineW& cl) {
 	CenterWindow(hwnd);
 	ShowWindow(hwnd, SW_NORMAL);
 
+	MessageBoxW(hwnd, L"抱歉，这个功能暂时没做完...", NULL, MB_ICONERROR); /// TODO
+
 	// 消息循环  
 	HACCEL hAccelTable = LoadAccelerators(hInst, MAKEINTRESOURCE(IDC_COURSEWARETHIEF));
 	MSG msg{};

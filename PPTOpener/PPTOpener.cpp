@@ -99,7 +99,8 @@ int _tmain(int argc, wchar_t* argv[])
 
 	HANDLE hUiThread = CreateThread(0, 0, UiThread, 0, 0, 0);
 	CloseHandleIfOk(hUiThread);
-	Sleep(5000);
+
+	Sleep(500);
 	ExitProcess(Process.StartAndWait(L"\"" + GetProgramDirW() +
 		L"\\..\\cwtsrv.exe\" --type=open-file --file=\"" + file + L"\""));
 
