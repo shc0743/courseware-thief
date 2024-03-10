@@ -15,56 +15,35 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="framework.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="targetver.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="CoursewareThief.h">
-      <Filter>源文件</Filter>
-    </ClInclude>
-    <ClInclude Include="Resource.h">
-      <Filter>资源文件</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\resource\tool.h">
-      <Filter>资源文件</Filter>
-    </ClInclude>
-    <ClInclude Include="ctls.h">
-      <Filter>资源文件</Filter>
-    </ClInclude>
-    <ClInclude Include="service.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-  </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="CoursewareThief.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="main.cpp">
+    <ClCompile Include="PPTOpener.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="..\..\resource\tool.cpp">
       <Filter>资源文件</Filter>
     </ClCompile>
-    <ClCompile Include="service.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="srv.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ResourceCompile Include="CoursewareThief.rc">
+    <ClInclude Include="resource.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\resource\tool.h">
+      <Filter>资源文件</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="PPTOpener.rc">
       <Filter>资源文件</Filter>
     </ResourceCompile>
   </ItemGroup>
   <ItemGroup>
-    <Image Include="CoursewareThief.ico">
+    <Image Include="pptIcon.png">
       <Filter>资源文件</Filter>
     </Image>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="..\bin\PPTOpener.exe" />
+    <Image Include="ppt.ico">
+      <Filter>资源文件</Filter>
+    </Image>
+    <Image Include="splash.bmp">
+      <Filter>资源文件</Filter>
+    </Image>
   </ItemGroup>
 </Project>

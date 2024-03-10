@@ -18,6 +18,7 @@ processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 extern HINSTANCE hInst;                                // 当前实例
 WCHAR szTitle[MAX_LOADSTRING];                  // 标题栏文本
 WCHAR szWindowClass[MAX_LOADSTRING];            // 主窗口类名
+WCHAR szTrayClass[MAX_LOADSTRING];            // 主窗口类名
 
 // 此代码模块中包含的函数的前向声明:
 ATOM                MyRegisterClass(HINSTANCE hInstance);
@@ -29,6 +30,7 @@ INT_PTR CALLBACK    About(HWND, UINT, WPARAM, LPARAM);
 #pragma region MyRegion
 
 static LRESULT CALLBACK WndProc_MainWnd(HWND hwnd, UINT message, WPARAM wp, LPARAM lp);
+static LRESULT CALLBACK WndProc_TrayWnd(HWND hwnd, UINT message, WPARAM wp, LPARAM lp);
 
 typedef struct {
     HWND hwndRoot;
@@ -36,9 +38,14 @@ typedef struct {
         hList1,
         hBtnExplore, hBtnOk, hBtnCancel;
 } WndData_MainWnd, * WndDataP_MainWnd;
+typedef struct {
+    HWND hwndRoot;
+	NOTIFYICONDATAW* pnid;
+} WndData_TrayWnd, * WndDataP_TrayWnd;
 
 
 static HFONT ghFont;
+extern std::wstring szSvcName;
 
 
 
@@ -99,6 +106,59 @@ int UiMain(CmdLineW& cl) {
 	return (int)msg.wParam;
 }
 
+int UiMain(CmdLineW& cl, wstring svcName) {
+	INITCOMMONCONTROLSEX icce{};
+	icce.dwSize = sizeof(icce);
+	icce.dwICC = ICC_ALL_CLASSES;
+	{void(0); }
+	if (!InitCommonControlsEx(&icce)) {
+		return GetLastError();
+	}
+
+	szSvcName = svcName;
+
+	// 初始化全局字符串
+	LoadStringW(hInst, IDS_STRING_WNDCLASS_TRAY, szTrayClass, MAX_LOADSTRING);
+
+	HICON hIcon = LoadIconW(hInst, MAKEINTRESOURCE(IDI_COURSEWARETHIEF));
+	ghFont = CreateFontW(-14, -7, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET,
+		OUT_CHARACTER_PRECIS, CLIP_CHARACTER_PRECIS, DEFAULT_QUALITY, FF_DONTCARE,
+		L"Consolas");
+	s7::MyRegisterClassW(szTrayClass, WndProc_TrayWnd, WNDCLASSEXW{
+		.hIcon = hIcon,
+		.lpszMenuName = MAKEINTRESOURCE(IDR_MENU1),
+		.hIconSm = hIcon,
+		});
+
+	// 创建窗口  
+	WndData_MainWnd wd{};
+	HWND hwnd = CreateWindowExW(0, szTrayClass,
+		svcName.c_str(),
+		WS_OVERLAPPED,
+		0, 0, 1, 1,
+		NULL, NULL, 0, &wd);
+
+	if (hwnd == NULL) {
+		return GetLastError();
+	}
+
+	 //不显示窗口 
+	//CenterWindow(hwnd);
+	//ShowWindow(hwnd, SW_NORMAL);
+
+	// 消息循环  
+	MSG msg{};
+	// 主消息循环:
+	while (GetMessage(&msg, nullptr, 0, 0))
+	{
+		{
+			TranslateMessage(&msg);
+			DispatchMessage(&msg);
+		}
+	}
+
+	return (int)msg.wParam;
+}
 
 
 
@@ -235,6 +295,116 @@ static LRESULT CALLBACK WndProc_MainWnd(HWND hwnd, UINT message, WPARAM wp, LPAR
 		break;
 
 	default:
+		return DefWindowProc(hwnd, message, wp, lp);
+	}
+
+	return 0;
+}
+static LRESULT CALLBACK WndProc_TrayWnd(HWND hwnd, UINT message, WPARAM wp, LPARAM lp) {
+	WndDataP_TrayWnd data = (WndDataP_TrayWnd)GetWindowLongPtr(hwnd, GWLP_USERDATA);
+	static UINT WM_TaskbarCreated = RegisterWindowMessage(TEXT("TaskbarCreated"));
+	constexpr UINT MYWM_CREATETRAYICON = WM_USER + 0xf1;
+	constexpr UINT MYWM_TRAYICONCALLBACK = WM_USER + 0xf5;
+	switch (message) {
+	case WM_CREATE:
+	{
+		LPCREATESTRUCTW pcr = (LPCREATESTRUCTW)lp;
+		if (!pcr) break;
+		WndDataP_TrayWnd dat = (WndDataP_TrayWnd)pcr->lpCreateParams;
+		if (!dat) break;
+		SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)(void*)dat);
+
+		dat->hwndRoot = hwnd;
+
+		PostMessageW(hwnd, MYWM_CREATETRAYICON, 0, 0);
+
+	}
+	break;
+
+	case MYWM_CREATETRAYICON:
+	{
+
+		data->pnid = (decltype(data->pnid))calloc(1, sizeof(*data->pnid));
+		if (data->pnid == NULL) break;
+		data->pnid->cbSize = sizeof(NOTIFYICONDATA);
+		data->pnid->hWnd = hwnd;
+		data->pnid->uID = 0;
+		data->pnid->uFlags = NIF_ICON | NIF_MESSAGE | NIF_INFO | NIF_TIP;
+		data->pnid->uCallbackMessage = MYWM_TRAYICONCALLBACK;
+		data->pnid->hIcon = LoadIcon(hInst,
+			MAKEINTRESOURCEW(IDI_COURSEWARETHIEF));
+
+		//wcscpy_s(data->pnid->szInfo, L"");
+		//wcscpy_s(data->pnid->szInfoTitle, L"");
+		WCHAR wcs_szTip[256] = { 0 };
+		LoadStringW(hInst, IDS_STRING_UI_TASKICONTEXT, wcs_szTip, 256);
+		wcscpy_s(data->pnid->szTip, wcs_szTip);
+
+		Shell_NotifyIconW(NIM_ADD, data->pnid);
+	}
+		break;
+
+	case MYWM_TRAYICONCALLBACK:
+		if (lp == WM_LBUTTONUP || lp == WM_RBUTTONUP) {
+			POINT pt = { 0 }; int resp = 0;
+			GetCursorPos(&pt);
+			SetForegroundWindow(hwnd);
+
+			HMENU menu = GetMenu(hwnd);
+			HMENU pop = GetSubMenu(menu, 0);
+
+			auto stat = ServiceManager.Query(szSvcName.c_str());
+			ModifyMenuW(pop, ID_MENU_servicestatus, 0, ID_MENU_servicestatus,
+				(szSvcName + L" 服务" + (stat == ServiceManager.STATUS_START ?
+					L"正在运行" : L"未在运行") + L"。").c_str());
+			RemoveMenu(pop, ID_MENU_EXIT_UI, 0);
+			RemoveMenu(pop, ID_MENU_EXIT_SERVICE, 0);
+			RemoveMenu(pop, ID_MENU_UNINSTALL, 0);
+			SetMenuDefaultItem(pop, ID_MENU_stolenppts, FALSE);
+
+			TrackPopupMenu(pop, TPM_RIGHTBUTTON, pt.x, pt.y, 0, hwnd, NULL);
+			break;
+		}
+		break;
+
+	case WM_COMMAND:
+	{
+		// wParam的低位字包含了控件ID，高位字包含了通知代码  
+		int id = LOWORD(wp);
+		int code = HIWORD(wp);
+
+		// 根据控件ID和通知代码处理不同的消息  
+		switch (id) {
+		case WM_CLOSE:
+			break;
+
+		case ID_MENU_stolenppts:
+			Process.StartOnly(L"\"" + GetProgramDirW() + L"\" --type=main-ui"
+				" --service-name=\"" + szSvcName + L"\"");
+			break;
+		
+		default:
+			// 未知的控件ID，可以调用默认处理或什么都不做  
+			break;
+		}
+		break;
+	}
+	break;
+
+	case WM_CLOSE:
+		break;
+	case WM_QUIT:
+		DestroyWindow(hwnd);
+		break;
+	case WM_DESTROY:
+		PostQuitMessage(0);
+		break;
+
+	default:
+		if (message == WM_TaskbarCreated) {
+			PostMessageW(hwnd, MYWM_CREATETRAYICON, 0, 0);
+			break;
+		}
 		return DefWindowProc(hwnd, message, wp, lp);
 	}
 

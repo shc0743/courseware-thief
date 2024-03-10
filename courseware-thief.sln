@@ -4,6 +4,11 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 VisualStudioVersion = 17.8.34525.116
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CoursewareThief", "CoursewareThief\CoursewareThief.vcxproj", "{73F0D831-57C4-419B-A22A-FF869F193224}"
+	ProjectSection(ProjectDependencies) = postProject
+		{D5E3F0D7-B873-45EE-BA21-F1CD1D80FFB6} = {D5E3F0D7-B873-45EE-BA21-F1CD1D80FFB6}
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "PPTOpener", "PPTOpener\PPTOpener.vcxproj", "{D5E3F0D7-B873-45EE-BA21-F1CD1D80FFB6}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -21,6 +26,14 @@ Global
 		{73F0D831-57C4-419B-A22A-FF869F193224}.Release|x64.Build.0 = Release|x64
 		{73F0D831-57C4-419B-A22A-FF869F193224}.Release|x86.ActiveCfg = Release|Win32
 		{73F0D831-57C4-419B-A22A-FF869F193224}.Release|x86.Build.0 = Release|Win32
+		{D5E3F0D7-B873-45EE-BA21-F1CD1D80FFB6}.Debug|x64.ActiveCfg = Debug|x64
+		{D5E3F0D7-B873-45EE-BA21-F1CD1D80FFB6}.Debug|x64.Build.0 = Debug|x64
+		{D5E3F0D7-B873-45EE-BA21-F1CD1D80FFB6}.Debug|x86.ActiveCfg = Debug|Win32
+		{D5E3F0D7-B873-45EE-BA21-F1CD1D80FFB6}.Debug|x86.Build.0 = Debug|Win32
+		{D5E3F0D7-B873-45EE-BA21-F1CD1D80FFB6}.Release|x64.ActiveCfg = Release|x64
+		{D5E3F0D7-B873-45EE-BA21-F1CD1D80FFB6}.Release|x64.Build.0 = Release|x64
+		{D5E3F0D7-B873-45EE-BA21-F1CD1D80FFB6}.Release|x86.ActiveCfg = Release|Win32
+		{D5E3F0D7-B873-45EE-BA21-F1CD1D80FFB6}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
