@@ -48,6 +48,12 @@ static HFONT ghFont;
 extern std::wstring szSvcName;
 
 
+#pragma comment(lib, "MyProgressWizardLib64.lib")
+#include "wizard.user.h"
+#include "cwdef.h"
+
+
+
 
 int UiMain(CmdLineW& cl) {
 	INITCOMMONCONTROLSEX icce{};
@@ -61,6 +67,8 @@ int UiMain(CmdLineW& cl) {
 	// 初始化全局字符串
 	LoadStringW(hInst, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);
 	LoadStringW(hInst, IDC_COURSEWARETHIEF, szWindowClass, MAX_LOADSTRING);
+
+	InitMprgComponent();
 
 	HICON hIcon = LoadIconW(hInst, MAKEINTRESOURCE(IDI_COURSEWARETHIEF));
 	HBRUSH hBg = CreateSolidBrush(RGB(0xF0, 0xF0, 0xF0));
@@ -90,7 +98,7 @@ int UiMain(CmdLineW& cl) {
 	CenterWindow(hwnd);
 	ShowWindow(hwnd, SW_NORMAL);
 
-	MessageBoxW(hwnd, L"抱歉，这个功能暂时没做完...", NULL, MB_ICONERROR); /// TODO
+	//MessageBoxW(hwnd, L"抱歉，这个功能暂时没做完...", NULL, MB_ICONERROR); /// TODO
 
 	// 消息循环  
 	HACCEL hAccelTable = LoadAccelerators(hInst, MAKEINTRESOURCE(IDC_COURSEWARETHIEF));
@@ -165,7 +173,6 @@ int UiMain(CmdLineW& cl, wstring svcName) {
 
 
 
-
 // 窗口过程函数  
 #include <shellapi.h>
 static LRESULT CALLBACK WndProc_MainWnd(HWND hwnd, UINT message, WPARAM wp, LPARAM lp) {
@@ -187,7 +194,7 @@ static LRESULT CALLBACK WndProc_MainWnd(HWND hwnd, UINT message, WPARAM wp, LPAR
 #include "./ctls.h"
 
 		dat->hList1 = custom(L"", WC_LISTVIEW, 0, 0, 1, 1,
-			LVS_REPORT | WS_BORDER);
+			LVS_SINGLESEL | LVS_REPORT | WS_BORDER);
 		dat->hBtnExplore = button(L"文件位置 (&E)", IDABORT);
 		dat->hBtnOk = button(L"打开 (&O)", IDOK);
 		dat->hBtnCancel = button(L"关闭 (&Q)", IDCANCEL);
@@ -204,7 +211,9 @@ static LRESULT CALLBACK WndProc_MainWnd(HWND hwnd, UINT message, WPARAM wp, LPAR
 		SetWindowTheme(data->hList1, L"Explorer", NULL);
 
 		LVCOLUMN lvc{};
-		wchar_t sz1[] = L"文件名", sz2[] = L"偷取时间", sz3[] = L"更改时间";
+		wchar_t sz1[] = L"文件名",
+			sz2[] = L"偷取时间", sz3[] = L"更改时间",
+			sz4[] = L"完整路径", sz5[] = L"文件 ID";
 
 		lvc.mask = LVCF_FMT | LVCF_WIDTH | LVCF_TEXT | LVCF_SUBITEM;
 		lvc.fmt = LVCFMT_LEFT;
@@ -216,22 +225,82 @@ static LRESULT CALLBACK WndProc_MainWnd(HWND hwnd, UINT message, WPARAM wp, LPAR
 		ListView_InsertColumn(data->hList1, 0, &lvc);
 
 		lvc.iSubItem = 0;
-		lvc.pszText = sz2;
-		lvc.cx = 180;               // Width of column in pixels.
+		lvc.pszText = sz4;
+		lvc.cx = 160;               // Width of column in pixels.
 		// Insert the columns into the list view.
 		ListView_InsertColumn(data->hList1, 1, &lvc);
 
 		lvc.iSubItem = 0;
-		lvc.pszText = sz3;
-		lvc.cx = 180;               // Width of column in pixels.
+		lvc.pszText = sz2;
+		lvc.cx = 100;               // Width of column in pixels.
 		// Insert the columns into the list view.
 		ListView_InsertColumn(data->hList1, 2, &lvc);
 
-		DragAcceptFiles(hwnd, TRUE);
+		lvc.iSubItem = 0;
+		lvc.pszText = sz3;
+		lvc.cx = 100;               // Width of column in pixels.
+		// Insert the columns into the list view.
+		ListView_InsertColumn(data->hList1, 3, &lvc);
+
+		lvc.iSubItem = 0;
+		lvc.pszText = sz5;
+		lvc.cx = 100;               // Width of column in pixels.
+		// Insert the columns into the list view.
+		ListView_InsertColumn(data->hList1, 4, &lvc);
+
+		//DragAcceptFiles(hwnd, TRUE);
 
 		PostMessage(hwnd, WM_USER + 0xf1, 0, 0);
 	}
 	break;
+
+	case WM_USER + 0xf1:
+	{
+		HMPRGOBJ hObj = CreateMprgObject();
+		HMPRGWIZ hWiz = CreateMprgWizard(hObj, MPRG_CREATE_PARAMS{
+			.hParentWindow = hwnd,
+			.max = size_t(-1) ,
+		});
+		OpenMprgWizard(hWiz);
+
+		CwIndexData_LoadFileData();
+		auto filename = CwIndexData_GetFileNames();
+		ListView_DeleteAllItems(data->hList1);
+		LVITEM lvI{};
+		// Initialize LVITEM members that are common to all items.
+		lvI.pszText = LPSTR_TEXTCALLBACK; // Sends an LVN_GETDISPINFO message.
+		lvI.mask = LVIF_TEXT | LVIF_STATE;
+		lvI.stateMask = 0;
+		lvI.iSubItem = 0;
+		lvI.state = 0;
+		wchar_t szBuffer[256]{};
+		lvI.pszText = szBuffer;
+		vector<CwIndex_MetaData> mds;
+		for (auto& i : filename) {
+			if (CwIndexData_GetFileData(i, mds)) for (auto& j : mds) {
+				wcscpy_s(szBuffer, i.substr(i.find_last_of(L"\\") + 1).c_str());
+				lvI.iSubItem = 0;
+				ListView_InsertItem(data->hList1, &lvI);
+				wcscpy_s(szBuffer, i.c_str());
+				lvI.iSubItem = 1;
+				ListView_SetItem(data->hList1, &lvI);
+				wcscpy_s(szBuffer, to_wstring(j.file_modify_time).c_str());
+				lvI.iSubItem = 2;
+				ListView_SetItem(data->hList1, &lvI);
+				wcscpy_s(szBuffer, to_wstring(j.steal_time).c_str());
+				lvI.iSubItem = 3;
+				ListView_SetItem(data->hList1, &lvI);
+				wcscpy_s(szBuffer, j.fileId);
+				lvI.iSubItem = 4;
+				ListView_SetItem(data->hList1, &lvI);
+				++lvI.iItem;
+			}
+		}
+
+		DestroyMprgWizard(hObj, hWiz);
+		DeleteMprgObject(hObj);
+	}
+		break;
 
 	case WM_COMMAND:
 	{
@@ -249,7 +318,36 @@ static LRESULT CALLBACK WndProc_MainWnd(HWND hwnd, UINT message, WPARAM wp, LPAR
 			SendMessageW(hwnd, WM_CLOSE, 0, 0);
 			break;
 
+		case IDOK:
+		case IDABORT:
+			if (code == BN_CLICKED) {
+				int nSel = ListView_GetSelectionMark(data->hList1);
+				if (nSel < 0) {
+					MessageBoxW(hwnd, DoesUserUsesChinese() ? L"请选择要打开的项目" :
+						L"Please choose an item to open", 0, MB_ICONERROR);
+					break;
+				}
 
+				wchar_t szFileId[64]{}, szFilename[2048]{};
+				ListView_GetItemText(data->hList1, nSel, 4, szFileId, 64);
+				ListView_GetItemText(data->hList1, nSel, 0, szFilename, 2048);
+				if (!szFilename[0] || !szFileId[0]) {
+					MessageBoxW(hwnd, DoesUserUsesChinese() ? L"获取数据时出现错误" :
+						L"An error occurred during getting data", 0, MB_ICONERROR);
+					break;
+				}
+				wstring filename = GetProgramPathW() + L"Files\\"s 
+					+ szFileId + L"\\" + szFilename;
+
+				if (id == IDABORT) {
+					ShellExecuteW(hwnd, L"open", (L"Files\\"s +
+						szFileId).c_str(), 0, 0, SW_NORMAL);
+					break;
+				}
+				Process.StartOnly(L"\"" + GetProgramDirW() + L"\" "
+					"--type=user-shell-open-file --file=\"" + filename + L"\" ");
+			}
+			break;
 		
 		default:
 			// 未知的控件ID，可以调用默认处理或什么都不做  

@@ -180,7 +180,7 @@ void WINAPI CoursewareThiefService::ServiceCtrlHandler(DWORD ctrlCode) {
 
 				for (size_t i = 0; i < 32; ++i) {
 					if (hServiceWorkerThreads[i]) {
-						SuspendThread(hServiceWorkerThreads[i]);
+						//SuspendThread(hServiceWorkerThreads[i]);
 					}
 				}
 
@@ -213,7 +213,7 @@ void WINAPI CoursewareThiefService::ServiceCtrlHandler(DWORD ctrlCode) {
 
 		for (size_t i = 0; i < 32; ++i) {
 			if (hServiceWorkerThreads[i]) {
-				ResumeThread(hServiceWorkerThreads[i]);
+				//ResumeThread(hServiceWorkerThreads[i]);
 			}
 		}
 

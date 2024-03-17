@@ -42,3 +42,4 @@ FileContentIndex
 fileList.bin
 out
 *.exe.data
+bin/Files

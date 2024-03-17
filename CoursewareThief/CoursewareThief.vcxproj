@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="..\packages\vcpkg.D.software.Program.vcpkg.1.0.0\build\native\vcpkg.D.software.Program.vcpkg.props" Condition="Exists('..\packages\vcpkg.D.software.Program.vcpkg.1.0.0\build\native\vcpkg.D.software.Program.vcpkg.props')" />
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
       <Configuration>Debug</Configuration>
@@ -90,6 +91,18 @@
     <CustomBuildBeforeTargets>
     </CustomBuildBeforeTargets>
   </PropertyGroup>
+  <PropertyGroup Label="Vcpkg">
+    <VcpkgEnabled>true</VcpkgEnabled>
+    <VcpkgManifestInstall>true</VcpkgManifestInstall>
+  </PropertyGroup>
+  <PropertyGroup Label="Vcpkg" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <VcpkgUseStatic>true</VcpkgUseStatic>
+    <VcpkgConfiguration>Release</VcpkgConfiguration>
+  </PropertyGroup>
+  <PropertyGroup Label="Vcpkg" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <VcpkgUseStatic>true</VcpkgUseStatic>
+    <VcpkgConfiguration>Release</VcpkgConfiguration>
+  </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
@@ -113,6 +126,7 @@
       <LanguageStandard>stdcpp20</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <CallingConvention>StdCall</CallingConvention>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -153,6 +167,7 @@
       <LanguageStandard>stdcpp20</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <CallingConvention>StdCall</CallingConvention>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -172,6 +187,7 @@
     <ClInclude Include="..\..\resource\tool.h" />
     <ClInclude Include="CoursewareThief.h" />
     <ClInclude Include="ctls.h" />
+    <ClInclude Include="cwdef.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="service.h" />
@@ -180,6 +196,7 @@
   <ItemGroup>
     <ClCompile Include="..\..\resource\tool.cpp" />
     <ClCompile Include="CoursewareThief.cpp" />
+    <ClCompile Include="cwindex.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="service.cpp" />
     <ClCompile Include="srv.cpp" />
@@ -192,8 +209,17 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="..\bin\PPTOpener.exe" />
+    <None Include="packages.config" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
+    <Import Project="..\packages\vcpkg.D.software.Program.vcpkg.1.0.0\build\native\vcpkg.D.software.Program.vcpkg.targets" Condition="Exists('..\packages\vcpkg.D.software.Program.vcpkg.1.0.0\build\native\vcpkg.D.software.Program.vcpkg.targets')" />
   </ImportGroup>
+  <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
+    <PropertyGroup>
+      <ErrorText>这台计算机上缺少此项目引用的 NuGet 程序包。使用“NuGet 程序包还原”可下载这些程序包。有关更多信息，请参见 http://go.microsoft.com/fwlink/?LinkID=322105。缺少的文件是 {0}。</ErrorText>
+    </PropertyGroup>
+    <Error Condition="!Exists('..\packages\vcpkg.D.software.Program.vcpkg.1.0.0\build\native\vcpkg.D.software.Program.vcpkg.props')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\vcpkg.D.software.Program.vcpkg.1.0.0\build\native\vcpkg.D.software.Program.vcpkg.props'))" />
+    <Error Condition="!Exists('..\packages\vcpkg.D.software.Program.vcpkg.1.0.0\build\native\vcpkg.D.software.Program.vcpkg.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\vcpkg.D.software.Program.vcpkg.1.0.0\build\native\vcpkg.D.software.Program.vcpkg.targets'))" />
+  </Target>
 </Project>

@@ -36,6 +36,9 @@
     <ClInclude Include="service.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="cwdef.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="CoursewareThief.cpp">
@@ -53,6 +56,9 @@
     <ClCompile Include="srv.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="cwindex.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="CoursewareThief.rc">
@@ -66,5 +72,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="..\bin\PPTOpener.exe" />
+    <None Include="packages.config" />
   </ItemGroup>
 </Project>

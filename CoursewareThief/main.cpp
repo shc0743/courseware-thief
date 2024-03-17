@@ -17,6 +17,7 @@ int APIENTRY wUiWinMain(_In_ HINSTANCE hInstance,
 int UiMain(CmdLineW& cl);
 int UiMain(CmdLineW& cl, wstring svcName);
 int WndMain_SetupDlg();
+int __stdcall ServiceFileCopyWorker(CmdLineW& cl);
 
 
 
@@ -99,10 +100,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 			extName = file.substr(file.find_last_of(L"."));
 		}
 		//MessageBox(0, extName.c_str(), 0, 0);
-		if (extName == L".pptx" || extName == L".ppt") do{
+		if (extName == L".pptx" || extName == L".ppt") do {
 			wstring originalOpenType, opencmd;
 			MyQueryRegistryValue(HKEY_CLASSES_ROOT, extName,
-				L"CoursewareThiefOriginalValue", originalOpenType);
+				L"", originalOpenType);
 			if (originalOpenType.empty()) break;
 			HKEY hkcmd = NULL;
 			RegOpenKeyExW(HKEY_CLASSES_ROOT, (originalOpenType +
@@ -130,6 +131,14 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		while ((hwnd = FindWindowW(cls, NULL)))
 			PostMessage(hwnd, WM_CLOSE, 0, 0);
 		return 0;
+	}
+	if (type == L"service-worker") {
+		wstring func;
+		cl.getopt(L"function", func);
+		if (func == L"file-copy") {
+			return ServiceFileCopyWorker(cl);
+		}
+		return ERROR_INVALID_FUNCTION;
 	}
 	if (type == L"setup") {
 		return WndMain_SetupDlg();
