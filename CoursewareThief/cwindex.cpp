@@ -6,7 +6,7 @@ using namespace std;
 
 
 static std::mutex gmx;
-static std::unordered_map<std::wstring, std::vector<CwIndex_MetaData>> file_data;
+static std::map<std::wstring, std::vector<CwIndex_MetaData>> file_data;
 
 
 void CwIndexData_InsertItem(
@@ -83,7 +83,11 @@ bool CwIndexData_LoadFileData() {
 			ZeroMemory(pstr, sizeof(pstr));
 			(void)ReadFile(hFile, &pstr, (DWORD)md.filenameSize, &readed, NULL);
 			if (pstr[0] == 0) continue;
-			if (!file_exists(L"Files\\"s + md.fileId)) continue; // 忽略不存在的文件
+			wstring filename = pstr;
+			if (filename.find(L"\\") != filename.npos)
+				filename.erase(0, filename.find_last_of(L"\\") + 1);
+			if (!file_exists(L"Files\\"s + md.fileId + L"\\" + filename))
+				continue; // 忽略不存在的文件
 
 			try {
 				auto& data = file_data.at(pstr);

