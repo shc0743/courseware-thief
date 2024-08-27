@@ -33,13 +33,15 @@ static LRESULT CALLBACK WndProc_MainWnd(HWND hwnd, UINT message, WPARAM wp, LPAR
 static LRESULT CALLBACK WndProc_TrayWnd(HWND hwnd, UINT message, WPARAM wp, LPARAM lp);
 
 typedef struct {
-    HWND hwndRoot;
-    HWND
-        hList1,
-        hBtnExplore, hBtnOk, hBtnCancel;
+	HWND hwndRoot;
+	HWND
+		hList1,
+		hBtnExplore, hBtnOk, hBtnCancel,
+		hTextFilter, hEditFilter, hBtnFilter;
+	WCHAR filterStr[2048];
 } WndData_MainWnd, * WndDataP_MainWnd;
 typedef struct {
-    HWND hwndRoot;
+	HWND hwndRoot;
 	NOTIFYICONDATAW* pnid;
 } WndData_TrayWnd, * WndDataP_TrayWnd;
 
@@ -226,6 +228,9 @@ static LRESULT CALLBACK WndProc_MainWnd(HWND hwnd, UINT message, WPARAM wp, LPAR
 		dat->hBtnExplore = button(L"文件位置 (&E)", IDABORT);
 		dat->hBtnOk = button(L"打开 (&O)", IDOK);
 		dat->hBtnCancel = button(L"关闭 (&Q)", IDCANCEL);
+		dat->hTextFilter = text(L"筛选:", 0, 0, 1, 1, SS_CENTER | SS_CENTERIMAGE);
+		dat->hEditFilter = edit();
+		dat->hBtnFilter = button(L"应用筛选器", IDRETRY);
 
 		PostMessage(hwnd, WM_USER + 0xf0, 0, 0);
 
@@ -305,6 +310,9 @@ static LRESULT CALLBACK WndProc_MainWnd(HWND hwnd, UINT message, WPARAM wp, LPAR
 		lvI.pszText = szBuffer;
 		vector<CwIndex_MetaData> mds;
 		for (auto& i : filename) {
+			if (data->filterStr[0]) {
+				if (i.find(data->filterStr) == i.npos) continue;
+			}
 			if (CwIndexData_GetFileData(i, mds)) for (auto& j : mds) {
 				wcscpy_s(szBuffer, i.find(L"\\") != i.npos ? 
 					i.substr(i.find_last_of(L"\\") + 1).c_str() : i.c_str());
@@ -377,6 +385,11 @@ static LRESULT CALLBACK WndProc_MainWnd(HWND hwnd, UINT message, WPARAM wp, LPAR
 					"--type=user-shell-open-file --file=\"" + filename + L"\" ");
 			}
 			break;
+
+		case IDRETRY:
+			SendMessage(data->hEditFilter, WM_GETTEXT, 2048, (LPARAM)data->filterStr);
+			PostMessage(hwnd, WM_USER + 0xf1, 0, 0);
+			break;
 		
 		default:
 			// 未知的控件ID，可以调用默认处理或什么都不做  
@@ -409,6 +422,12 @@ static LRESULT CALLBACK WndProc_MainWnd(HWND hwnd, UINT message, WPARAM wp, LPAR
 
 		SetWindowPos(data->hList1, 0, 10, 10, rc.right - rc.left - 20,
 			rc.bottom - rc.top - 60, SWP_NOACTIVATE);
+		SetWindowPos(data->hTextFilter, 0, 10,
+			rc.bottom - rc.top - 40, 40, 30, SWP_NOACTIVATE);
+		SetWindowPos(data->hEditFilter, 0, 60,
+			rc.bottom - rc.top - 40, 120, 30, SWP_NOACTIVATE);
+		SetWindowPos(data->hBtnFilter, 0, 190,
+			rc.bottom - rc.top - 40, 100, 30, SWP_NOACTIVATE);
 		SetWindowPos(data->hBtnExplore, 0, rc.right - rc.left - 320,
 			rc.bottom - rc.top - 40, 130, 30, SWP_NOACTIVATE);
 		SetWindowPos(data->hBtnOk, 0, rc.right - rc.left - 180,
@@ -568,41 +587,41 @@ static LRESULT CALLBACK WndProc_TrayWnd(HWND hwnd, UINT message, WPARAM wp, LPAR
 
 
 int APIENTRY wUiWinMain(_In_ HINSTANCE hInstance,
-                     _In_opt_ HINSTANCE hPrevInstance,
-                     _In_ LPWSTR    lpCmdLine,
-                     _In_ int       nCmdShow)
+					 _In_opt_ HINSTANCE hPrevInstance,
+					 _In_ LPWSTR    lpCmdLine,
+					 _In_ int       nCmdShow)
 {
-    UNREFERENCED_PARAMETER(hPrevInstance);
-    UNREFERENCED_PARAMETER(lpCmdLine);
+	UNREFERENCED_PARAMETER(hPrevInstance);
+	UNREFERENCED_PARAMETER(lpCmdLine);
 
-    // TODO: 在此处放置代码。
+	// TODO: 在此处放置代码。
 
-    // 初始化全局字符串
-    LoadStringW(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);
-    LoadStringW(hInstance, IDC_COURSEWARETHIEF, szWindowClass, MAX_LOADSTRING);
-    MyRegisterClass(hInstance);
+	// 初始化全局字符串
+	LoadStringW(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);
+	LoadStringW(hInstance, IDC_COURSEWARETHIEF, szWindowClass, MAX_LOADSTRING);
+	MyRegisterClass(hInstance);
 
-    // 执行应用程序初始化:
-    if (!InitInstance (hInstance, nCmdShow))
-    {
-        return FALSE;
-    }
+	// 执行应用程序初始化:
+	if (!InitInstance (hInstance, nCmdShow))
+	{
+		return FALSE;
+	}
 
-    HACCEL hAccelTable = LoadAccelerators(hInstance, MAKEINTRESOURCE(IDC_COURSEWARETHIEF));
+	HACCEL hAccelTable = LoadAccelerators(hInstance, MAKEINTRESOURCE(IDC_COURSEWARETHIEF));
 
-    MSG msg;
+	MSG msg;
 
-    // 主消息循环:
-    while (GetMessage(&msg, nullptr, 0, 0))
-    {
-        if (!TranslateAccelerator(msg.hwnd, hAccelTable, &msg))
-        {
-            TranslateMessage(&msg);
-            DispatchMessage(&msg);
-        }
-    }
+	// 主消息循环:
+	while (GetMessage(&msg, nullptr, 0, 0))
+	{
+		if (!TranslateAccelerator(msg.hwnd, hAccelTable, &msg))
+		{
+			TranslateMessage(&msg);
+			DispatchMessage(&msg);
+		}
+	}
 
-    return (int) msg.wParam;
+	return (int) msg.wParam;
 }
 
 
@@ -615,7 +634,7 @@ int APIENTRY wUiWinMain(_In_ HINSTANCE hInstance,
 ATOM MyRegisterClass(HINSTANCE hInstance)
 {
 	DebugBreak();
-    return 0;
+	return 0;
 }
 
 //
@@ -634,11 +653,11 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
    hInst = hInstance; // 将实例句柄存储在全局变量中
 
    HWND hWnd = CreateWindowW(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW,
-      0, 0, 640, 480, nullptr, nullptr, hInstance, nullptr);
+	  0, 0, 640, 480, nullptr, nullptr, hInstance, nullptr);
 
    if (!hWnd)
    {
-      return FALSE;
+	  return FALSE;
    }
 
    ShowWindow(hWnd, nCmdShow);
@@ -662,60 +681,60 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	DebugBreak();
-    switch (message)
-    {
-    case WM_COMMAND:
-        {
-            int wmId = LOWORD(wParam);
-            // 分析菜单选择:
-            switch (wmId)
-            {
-            case IDM_ABOUT:
-                DialogBox(hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, About);
-                break;
-            case IDM_EXIT:
-                DestroyWindow(hWnd);
-                break;
-            default:
-                return DefWindowProc(hWnd, message, wParam, lParam);
-            }
-        }
-        break;
-    case WM_PAINT:
-        {
-            PAINTSTRUCT ps;
-            HDC hdc = BeginPaint(hWnd, &ps);
-            // TODO: 在此处添加使用 hdc 的任何绘图代码...
-            EndPaint(hWnd, &ps);
-        }
-        break;
-    case WM_DESTROY:
-        PostQuitMessage(0);
-        break;
-    default:
-        return DefWindowProc(hWnd, message, wParam, lParam);
-    }
-    return 0;
+	switch (message)
+	{
+	case WM_COMMAND:
+		{
+			int wmId = LOWORD(wParam);
+			// 分析菜单选择:
+			switch (wmId)
+			{
+			case IDM_ABOUT:
+				DialogBox(hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, About);
+				break;
+			case IDM_EXIT:
+				DestroyWindow(hWnd);
+				break;
+			default:
+				return DefWindowProc(hWnd, message, wParam, lParam);
+			}
+		}
+		break;
+	case WM_PAINT:
+		{
+			PAINTSTRUCT ps;
+			HDC hdc = BeginPaint(hWnd, &ps);
+			// TODO: 在此处添加使用 hdc 的任何绘图代码...
+			EndPaint(hWnd, &ps);
+		}
+		break;
+	case WM_DESTROY:
+		PostQuitMessage(0);
+		break;
+	default:
+		return DefWindowProc(hWnd, message, wParam, lParam);
+	}
+	return 0;
 }
 
 // “关于”框的消息处理程序。
 INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 {
-    UNREFERENCED_PARAMETER(lParam);
-    switch (message)
-    {
-    case WM_INITDIALOG:
-        return (INT_PTR)TRUE;
+	UNREFERENCED_PARAMETER(lParam);
+	switch (message)
+	{
+	case WM_INITDIALOG:
+		return (INT_PTR)TRUE;
 
-    case WM_COMMAND:
-        if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
-        {
-            EndDialog(hDlg, LOWORD(wParam));
-            return (INT_PTR)TRUE;
-        }
-        break;
-    }
-    return (INT_PTR)FALSE;
+	case WM_COMMAND:
+		if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
+		{
+			EndDialog(hDlg, LOWORD(wParam));
+			return (INT_PTR)TRUE;
+		}
+		break;
+	}
+	return (INT_PTR)FALSE;
 }
 
 
@@ -736,10 +755,10 @@ struct setup_preinstallation_data
 };
 INT_PTR CALLBACK WndProc_SetupDlg(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 {
-    UNREFERENCED_PARAMETER(lParam);
-    switch (message)
-    {
-    case WM_INITDIALOG:
+	UNREFERENCED_PARAMETER(lParam);
+	switch (message)
+	{
+	case WM_INITDIALOG:
 	{
 		wstring path;
 		if (file_exists(L"D:\\")) path = L"D:\\Courseware Thief Service";
@@ -750,14 +769,14 @@ INT_PTR CALLBACK WndProc_SetupDlg(HWND hDlg, UINT message, WPARAM wParam, LPARAM
 		}
 		SetDlgItemTextW(hDlg, IDC_EDIT_INSTALL_LOCATION, path.c_str());
 	}
-        return (INT_PTR)TRUE;
+		return (INT_PTR)TRUE;
 
 	case WM_COMMAND:
-        if (LOWORD(wParam) == IDCANCEL)
-        {
-            EndDialog(hDlg, LOWORD(wParam));
-            return (INT_PTR)TRUE;
-        }
+		if (LOWORD(wParam) == IDCANCEL)
+		{
+			EndDialog(hDlg, LOWORD(wParam));
+			return (INT_PTR)TRUE;
+		}
 		if (LOWORD(wParam) == IDYES) {
 			HANDLE fp = CreateFileW((GetProgramDirW() + L".pre-installation-data").c_str(),
 				GENERIC_WRITE, 0, 0, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0);
@@ -778,8 +797,8 @@ INT_PTR CALLBACK WndProc_SetupDlg(HWND hDlg, UINT message, WPARAM wParam, LPARAM
 			MessageBoxTimeoutW(0, L"预安装已完成。", L"Success",
 				MB_ICONINFORMATION, 0, 30000);
 
-            EndDialog(hDlg, LOWORD(wParam));
-            return (INT_PTR)TRUE;
+			EndDialog(hDlg, LOWORD(wParam));
+			return (INT_PTR)TRUE;
 		}
 		if (LOWORD(wParam) == IDOK) {
 			WCHAR path[2048]{};
@@ -793,9 +812,9 @@ INT_PTR CALLBACK WndProc_SetupDlg(HWND hDlg, UINT message, WPARAM wParam, LPARAM
 				return (INT_PTR)TRUE;
 			}
 		}
-        break;
-    }
-    return (INT_PTR)FALSE;
+		break;
+	}
+	return (INT_PTR)FALSE;
 }
 int WndMain_SetupDlg() {
 	HANDLE fp = CreateFileW((GetProgramDirW() + L".pre-installation-data").c_str(),
